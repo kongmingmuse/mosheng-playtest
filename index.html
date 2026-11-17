@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#eee6d4">
+<meta name="description" content="墨生 · 字即世界 — type a word, watch it turn into a living ink painting.">
+<title>墨生 · 字即世界</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kaushan+Script&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#eee6d4;--ink:#1a1a1c;--red:#b22a20;--line:rgba(26,26,28,.28);--sub:rgba(26,26,28,.5)}
+  body.night{--paper:#0e0f12;--ink:#e6e4dc;--line:rgba(230,228,220,.28);--sub:rgba(230,228,220,.45)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--paper);transition:background 1.5s;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+  body{font-family:"Ma Shan Zheng","STKaiti","KaiTi","Kaiti SC",serif;color:var(--ink);user-select:none;-webkit-user-select:none}
+  canvas#c{position:fixed;left:0;top:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+  /* 隐藏输入框：用来接住输入法（拼音）打出的字 */
+  #ime{position:fixed;left:50%;bottom:140px;width:2px;height:24px;opacity:0;border:0;outline:0;resize:none;font-size:16px;background:transparent;color:transparent;caret-color:transparent;z-index:1}
+  #seal{position:fixed;left:28px;top:26px;display:flex;gap:10px;align-items:flex-start;z-index:5}
+  #seal .stamp{width:46px;height:58px;background:var(--red);color:#f6eee0;border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;line-height:24px;box-shadow:inset 0 0 0 2px rgba(255,240,220,.25)}
+  #seal .tag{writing-mode:vertical-rl;font-size:12px;letter-spacing:4px;color:var(--sub)}
+  #tools{position:fixed;right:26px;top:26px;display:flex;gap:10px;z-index:5}
+  #tools button{font-family:inherit;font-size:15px;padding:5px 15px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--sub);cursor:pointer;transition:all .3s}
+  #tools button.on{background:var(--red);border-color:var(--red);color:#f6eee0}
+  #poem{position:fixed;right:42px;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;font-size:26px;letter-spacing:10px;color:var(--ink);opacity:0;transition:opacity 1.2s;z-index:4;pointer-events:none}
+  #poem small{display:block;font-size:12px;letter-spacing:3px;color:var(--red);margin-right:10px}
+  #bar{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);display:flex;gap:8px;z-index:5}
+  #bar button{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--ink);font-family:inherit;font-size:18px;cursor:pointer;transition:all .25s;opacity:.75}
+  #bar button:hover{opacity:1;border-color:var(--red);color:var(--red);transform:translateY(-2px)}
+  #hint{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);font-size:12px;color:var(--sub);letter-spacing:1px;white-space:nowrap;z-index:5;font-family:"STKaiti","KaiTi",serif}
+  #hint b{font-weight:normal;color:var(--red)}
+  #bar{max-width:94vw;overflow-x:auto;scrollbar-width:none;touch-action:pan-x;padding:2px 4px}
+  #bar::-webkit-scrollbar{display:none}
+  #bar button{flex-shrink:0}
+  body.en #bar button{width:auto;border-radius:999px;padding:0 11px;font-family:"Kaushan Script",cursive;font-size:15px}
+  body.en #poem{writing-mode:horizontal-tb;top:86px;right:50%;transform:translateX(50%);font-family:"Kaushan Script",cursive;font-size:24px;letter-spacing:1px;text-align:center;white-space:nowrap}
+  body.en #poem small{margin:4px 0 0;font-size:13px}
+  #pal{position:fixed;left:26px;bottom:34px;display:flex;gap:7px;z-index:5}
+  #pal button{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+  #pal button i{display:block;width:14px;height:14px;border-radius:50%}
+  #pal button.on{border:2px solid var(--red)}
+  #write{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(82px + env(safe-area-inset-bottom));z-index:6;font-family:inherit;font-size:17px;padding:8px 22px;border-radius:999px;border:1px solid var(--red);background:var(--red);color:#f6eee0;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+  body.en #write{font-family:"Kaushan Script",cursive}
+  #typing{position:fixed;left:50%;transform:translateX(-50%);bottom:130px;font-family:"Kaushan Script",cursive;font-size:30px;color:var(--ink);opacity:.75;z-index:6;pointer-events:none;white-space:nowrap}
+  #typing:not(:empty)::after{content:'|';opacity:.4;animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:0}}
+  /* 手机 / 触屏 */
+  @media (hover:none),(max-width:700px){
+    #write{display:block}
+    #seal{left:14px;top:calc(14px + env(safe-area-inset-top))}
+    #seal .stamp{width:36px;height:46px;font-size:17px;line-height:19px}
+    #seal .tag{font-size:10px;letter-spacing:2px}
+    #tools{right:12px;top:calc(14px + env(safe-area-inset-top));gap:6px}
+    #tools button{font-size:13px;padding:4px 10px}
+    #poem{right:14px;font-size:20px;letter-spacing:6px}
+    body.en #poem{top:74px;font-size:19px}
+    #bar{left:0;transform:none;width:100vw;max-width:100vw;bottom:calc(30px + env(safe-area-inset-bottom));padding:2px 12px;gap:7px}
+    #bar button{width:38px;height:38px;font-size:19px;opacity:.85}
+    #hint{bottom:calc(10px + env(safe-area-inset-bottom));font-size:10.5px;max-width:96vw;overflow:hidden;text-overflow:ellipsis}
+    #pal{left:12px;bottom:calc(84px + env(safe-area-inset-bottom));flex-direction:column}
+    #pal button{width:32px;height:32px}
+    #typing{bottom:calc(140px + env(safe-area-inset-bottom))}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<textarea id="ime" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"></textarea>
+<div id="seal"><div class="stamp"><span>墨</span><span>生</span></div><div class="tag" id="tag">字即世界 · 落笔成灵</div></div>
+<div id="tools"><button id="bAuto">自在</button><button id="bSound" class="on">有声</button><button id="bShot">留影</button><button id="bLang">EN</button></div>
+<div id="poem"></div>
+<div id="bar"></div>
+<div id="hint"></div>
+<div id="pal"></div>
+<button id="write">✎ 写字</button>
+<div id="typing"></div>
+
+<script>
+'use strict';
+// ========== 基础 ==========
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1, MIN = 0, now = 0;
+const FONT = '"Ma Shan Zheng","STKaiti","KaiTi","Kaiti SC","Songti SC",serif';
+const FONT_EN = '"Kaushan Script","Brush Script MT","Segoe Script",cursive';
+const isLatin = t => /^[A-Za-z][A-Za-z'\-]*$/.test(t);
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const mixc = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${clamp(a, 0, 1)})`;
+
+// 主题：T=0 白昼宣纸，T=1 月夜
+let T = 0, Ttarget = 0;
+const C = {};
+function updateColors() {
+  C.paper = mixc([238, 230, 212], [14, 15, 18], T);
+  C.ink = mixc([24, 24, 26], [228, 228, 220], T);
+  C.red = mixc([178, 42, 32], [225, 85, 55], T);
+  C.teal = mixc([36, 104, 96], [110, 205, 185], T);
+  C.mist = mixc([238, 230, 212], [14, 15, 18], T);
+}
+updateColors();
+
+// ========== 纸纹 ==========
+const paperTex = document.createElement('canvas');
+(function makePaper() {
+  paperTex.width = paperTex.height = 512;
+  const p = paperTex.getContext('2d');
+  for (let i = 0; i < 9000; i++) {
+    p.fillStyle = `rgba(110,90,60,${rand(0.02, 0.07)})`;
+    p.fillRect(rand(0, 512), rand(0, 512), rand(0.5, 1.6), rand(0.5, 1.6));
+  }
+  p.lineCap = 'round';
+  for (let i = 0; i < 700; i++) {
+    const x = rand(0, 512), y = rand(0, 512), a = rand(0, Math.PI * 2), l = rand(3, 16);
+    p.strokeStyle = `rgba(120,95,60,${rand(0.03, 0.08)})`; p.lineWidth = rand(0.3, 0.8);
+    p.beginPath(); p.moveTo(x, y); p.quadraticCurveTo(x + Math.cos(a) * l * .5 + rand(-2, 2), y + Math.sin(a) * l * .5 + rand(-2, 2), x + Math.cos(a) * l, y + Math.sin(a) * l); p.stroke();
+  }
+})();
+let paperPat = null;
+
+// ========== 流体（墨在水里晕开） ==========
+let gw, gh, cxs, cys, N;
+let U, V, U0, V0, P, DIV, CURL, DK, DR, DC, TMP;
+let dyeCanvas, dyeCtx, dyeImg;
+function initFluid() {
+  gw = W > H ? 160 : 100; gh = Math.max(60, Math.round(gw * H / W));
+  cxs = W / gw; cys = H / gh; N = gw * gh;
+  const F = () => new Float32Array(N);
+  U = F(); V = F(); U0 = F(); V0 = F(); P = F(); DIV = F(); CURL = F(); DK = F(); DR = F(); DC = F(); TMP = F();
+  dyeCanvas = document.createElement('canvas'); dyeCanvas.width = gw; dyeCanvas.height = gh;
+  dyeCtx = dyeCanvas.getContext('2d'); dyeImg = dyeCtx.createImageData(gw, gh);
+}
+function sample(f, x, y) {
+  x = clamp(x, 0, gw - 1.001); y = clamp(y, 0, gh - 1.001);
+  const i = x | 0, j = y | 0, fx = x - i, fy = y - j, id = i + j * gw;
+  return (f[id] * (1 - fx) + f[id + 1] * fx) * (1 - fy) + (f[id + gw] * (1 - fx) + f[id + gw + 1] * fx) * fy;
+}
+function advect(src, dst, dt, diss) {
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+    const id = i + j * gw;
+    dst[id] = sample(src, i - dt * U[id], j - dt * V[id]) * diss;
+  }
+}
+let dyeDiss = 0.9975, clearing = 0;
+function fluidStep(dt) {
+  // 涡度增强：让墨烟卷出漩涡
+  for (let j = 1; j < gh - 1; j++) for (let i = 1; i < gw - 1; i++) {
+    const id = i + j * gw;
+    CURL[id] = (V[id + 1] - V[id - 1] - U[id + gw] + U[id - gw]) * 0.5;
+  }
+  const eps = 9;
+  for (let j = 2; j < gh - 2; j++) for (let i = 2; i < gw - 2; i++) {
+    const id = i + j * gw;
+    const nx = (Math.abs(CURL[id + 1]) - Math.abs(CURL[id - 1])) * 0.5;
+    const ny = (Math.abs(CURL[id + gw]) - Math.abs(CURL[id - gw])) * 0.5;
+    const l = Math.hypot(nx, ny) + 1e-5, w = CURL[id];
+    U[id] += eps * (ny / l) * w * dt; V[id] -= eps * (nx / l) * w * dt;
+  }
+  const vd = Math.pow(0.985, dt * 60);
+  advect(U, U0, dt, vd); advect(V, V0, dt, vd);
+  let t = U; U = U0; U0 = t; t = V; V = V0; V0 = t;
+  // 边界
+  for (let i = 0; i < gw; i++) { U[i] = V[i] = U[i + (gh - 1) * gw] = V[i + (gh - 1) * gw] = 0; }
+  for (let j = 0; j < gh; j++) { U[j * gw] = V[j * gw] = U[j * gw + gw - 1] = V[j * gw + gw - 1] = 0; }
+  // 投影：保持不可压缩
+  for (let j = 1; j < gh - 1; j++) for (let i = 1; i < gw - 1; i++) {
+    const id = i + j * gw;
+    DIV[id] = -0.5 * (U[id + 1] - U[id - 1] + V[id + gw] - V[id - gw]);
+  }
+  for (let k = 0; k < 14; k++) {
+    for (let j = 1; j < gh - 1; j++) for (let i = 1; i < gw - 1; i++) {
+      const id = i + j * gw;
+      P[id] = (DIV[id] + P[id - 1] + P[id + 1] + P[id - gw] + P[id + gw]) * 0.25;
+    }
+  }
+  for (let j = 1; j < gh - 1; j++) for (let i = 1; i < gw - 1; i++) {
+    const id = i + j * gw;
+    U[id] -= 0.5 * (P[id + 1] - P[id - 1]); V[id] -= 0.5 * (P[id + gw] - P[id - gw]);
+  }
+  const dd = Math.pow(clearing > 0 ? 0.93 : dyeDiss, dt * 60);
+  advect(DK, TMP, dt, dd); DK.set(TMP);
+  advect(DR, TMP, dt, dd); DR.set(TMP);
+  advect(DC, TMP, dt, dd); DC.set(TMP);
+}
+// 在屏幕坐标 (x,y) 点一笔：速度 (dx,dy) 像素/秒，颜料 col = 'k'|'r'|'c'|'w'(清水)
+function splat(x, y, dx, dy, rad, col, amt) {
+  const gx = x / cxs, gy = y / cys, r = rad / cxs, r2 = r * r;
+  const i0 = Math.max(1, (gx - r * 2.5) | 0), i1 = Math.min(gw - 2, (gx + r * 2.5) | 0);
+  const j0 = Math.max(1, (gy - r * 2.5) | 0), j1 = Math.min(gh - 2, (gy + r * 2.5) | 0);
+  const D = col === 'r' ? DR : col === 'c' ? DC : DK;
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const d2 = (i - gx) ** 2 + (j - gy) ** 2, w = Math.exp(-d2 / r2);
+    if (w < 0.01) continue;
+    const id = i + j * gw;
+    U[id] += dx / cxs * w; V[id] += dy / cys * w;
+    if (col === 'w') { const f = 1 - 0.25 * w * amt; DK[id] *= f; DR[id] *= f; DC[id] *= f; }
+    else if (amt) D[id] = Math.min(4, D[id] + amt * w);
+  }
+}
+function renderDye() {
+  const d = dyeImg.data, k = C.ink, r = C.red, c = C.teal;
+  for (let id = 0, p = 0; id < N; id++, p += 4) {
+    const a = DK[id], b = DR[id], e = DC[id], s = a + b + e;
+    if (s < 0.004) { d[p + 3] = 0; continue; }
+    d[p] = (a * k[0] + b * r[0] + e * c[0]) / s;
+    d[p + 1] = (a * k[1] + b * r[1] + e * c[1]) / s;
+    d[p + 2] = (a * k[2] + b * r[2] + e * c[2]) / s;
+    d[p + 3] = 255 * (1 - Math.exp(-s * 1.7));
+  }
+  dyeCtx.putImageData(dyeImg, 0, 0);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(dyeCanvas, 0, 0, W, H);
+}
+// 把字形“写”进流体：字化成墨烟
+const glyphCv = document.createElement('canvas'), glyphCtx = glyphCv.getContext('2d', { willReadFrequently: true });
+function injectGlyph(ch, x, y, size, col, font) {
+  glyphCv.width = gw; glyphCv.height = gh;
+  glyphCtx.clearRect(0, 0, gw, gh);
+  glyphCtx.fillStyle = '#000'; glyphCtx.textAlign = 'center'; glyphCtx.textBaseline = 'middle';
+  glyphCtx.font = `${size / cxs}px ${font || FONT}`;
+  glyphCtx.fillText(ch, x / cxs, y / cys);
+  const data = glyphCtx.getImageData(0, 0, gw, gh).data;
+  const D = col === 'r' ? DR : col === 'c' ? DC : DK;
+  // 几个随机漩涡中心，让墨卷起来
+  const vs = [];
+  for (let n = 0; n < 3; n++) vs.push([x / cxs + rand(-1, 1) * size / cxs * 0.4, y / cys + rand(-1, 1) * size / cys * 0.4, rand(18, 34) * (Math.random() < .5 ? -1 : 1)]);
+  for (let id = 0; id < N; id++) {
+    const a = data[id * 4 + 3] / 255; if (a < 0.05) continue;
+    D[id] = Math.min(4, D[id] + a * 1.6);
+    const i = id % gw, j = (id / gw) | 0;
+    for (const [vx, vy, s] of vs) {
+      const dx = i - vx, dy = j - vy, d = Math.hypot(dx, dy) + 2;
+      U[id] += -dy / d * s * a / Math.sqrt(d) * 1.2; V[id] += dx / d * s * a / Math.sqrt(d) * 1.2;
+    }
+    V[id] -= 4 * a;
+  }
+}
+
+// ========== 场景对象 ==========
+let scene = [];      // 静景与生灵
+let fx = [];         // 粒子、闪电、字形等短命效果
+let wind = 0, windT = 0, shake = 0, flash = 0;
+const has = k => scene.find(o => o.kind === k && !o.dying);
+
+// 1D 噪声
+function noise1(seed) {
+  const v = []; for (let i = 0; i < 256; i++) v.push(Math.random());
+  return x => { x = x * 8 + seed; const i = Math.floor(x), f = x - i, s = f * f * (3 - 2 * f); return lerp(v[((i % 256) + 256) % 256], v[(((i + 1) % 256) + 256) % 256], s); };
+}
+
+class Base { constructor(kind) { this.kind = kind; this.born = now; this.dying = false; this.fade = 1; } get rev() { return clamp((now - this.born) / 2.2, 0, 1) * this.fade; } }
+
+// —— 山 ——
+class Mountains extends Base {
+  constructor(n) {
+    super('山'); this.layers = [];
+    const cnt = 3;
+    for (let L = 0; L < cnt; L++) {
+      const nA = noise1(rand(0, 99)), nB = noise1(rand(0, 99)), nC = noise1(rand(0, 99));
+      const peaks = [rand(.1, .9), rand(.1, .9)], ys = [];
+      const base = 0.5 + L * 0.09 + n * 0.03, amp = 0.2 - L * 0.035;
+      for (let i = 0; i <= 160; i++) {
+        const x = i / 160;
+        let h = 0.55 * nA(x * 0.5) + 0.3 * nB(x * 1.6) + 0.15 * nC(x * 4);
+        for (const pk of peaks) h += 0.55 * Math.exp(-((x - pk) ** 2) / 0.006);
+        ys.push(base - amp * h);
+      }
+      const cun = []; // 皴笔
+      for (let k = 0; k < 70; k++) { const x = Math.random(); cun.push([x, rand(0.005, 0.09), rand(0.012, 0.035), rand(-0.6, 0.6)]); }
+      this.layers.push({ ys, cun, a: [0.16, 0.28, 0.48][L] });
+    }
+  }
+  draw() {
+    const r = this.rev;
+    if (r <= 0) return;
+    for (const l of this.layers) {
+      let top = 1; for (const y of l.ys) top = Math.min(top, y);
+      const g = ctx.createLinearGradient(0, top * H, 0, top * H + H * 0.36);
+      g.addColorStop(0, rgba(C.ink, l.a * r)); g.addColorStop(0.55, rgba(C.ink, l.a * 0.45 * r)); g.addColorStop(1, rgba(C.ink, 0));
+      ctx.beginPath(); ctx.moveTo(0, H);
+      l.ys.forEach((y, i) => ctx.lineTo(i / 160 * W, y * H));
+      ctx.lineTo(W, H); ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = rgba(C.ink, l.a * 1.1 * r); ctx.lineWidth = 1.2;
+      ctx.beginPath(); l.ys.forEach((y, i) => i ? ctx.lineTo(i / 160 * W, y * H) : ctx.moveTo(0, y * H)); ctx.stroke();
+      ctx.lineWidth = 0.8; ctx.strokeStyle = rgba(C.ink, l.a * 0.9 * r);
+      for (const [x, d, len, sl] of l.cun) {
+        const y = l.ys[Math.round(x * 160)] + d;
+        ctx.beginPath(); ctx.moveTo(x * W, y * H); ctx.lineTo(x * W + sl * len * H, (y + len) * H); ctx.stroke();
+      }
+    }
+    // 山间云雾
+    const m = ctx.createLinearGradient(0, H * 0.62, 0, H);
+    m.addColorStop(0, rgba(C.mist, 0)); m.addColorStop(0.5, rgba(C.mist, 0.35 * r)); m.addColorStop(1, rgba(C.mist, 0.1 * r));
+    ctx.fillStyle = m; ctx.fillRect(0, H * 0.62, W, H * 0.38);
+  }
+}
+// —— 月 ——
+class Moon extends Base {
+  constructor() { super('月'); this.pulse = 0; }
+  draw() {
+    const r = this.rev, x = W * 0.8, y = H * 0.2, R = MIN * 0.06 * (1 + this.pulse * 0.08);
+    this.pulse *= 0.97;
+    const glow = ctx.createRadialGradient(x, y, R * 0.8, x, y, R * (3 + T * 2));
+    const gc = mixc([150, 150, 150], [255, 250, 230], T);
+    glow.addColorStop(0, rgba(gc, (0.18 + T * 0.25) * r)); glow.addColorStop(1, rgba(gc, 0));
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y, R * 5, 0, 7); ctx.fill();
+    ctx.fillStyle = rgba(mixc([248, 244, 234], [255, 252, 238], T), r);
+    ctx.beginPath(); ctx.arc(x, y, R, 0, 7); ctx.fill();
+    ctx.strokeStyle = rgba(C.ink, 0.25 * r * (1 - T)); ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = rgba(mixc([200, 195, 185], [225, 222, 205], T), 0.4 * r);
+    ctx.beginPath(); ctx.arc(x - R * 0.3, y - R * 0.2, R * 0.22, 0, 7); ctx.arc(x + R * 0.25, y + R * 0.3, R * 0.15, 0, 7); ctx.fill();
+  }
+}
+// —— 竹 ——
+function leaf(x, y, ang, len, wid, col) {
+  const c = Math.cos(ang), s = Math.sin(ang), px = -s, py = c;
+  ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x, y);
+  ctx.quadraticCurveTo(x + c * len * 0.4 + px * wid, y + s * len * 0.4 + py * wid, x + c * len, y + s * len);
+  ctx.quadraticCurveTo(x + c * len * 0.4 - px * wid * 0.6, y + s * len * 0.4 - py * wid * 0.6, x, y); ctx.fill();
+}
+class Bamboo extends Base {
+  constructor(n) {
+    super('竹'); this.stalks = [];
+    const bx = n % 2 ? W * 0.88 : W * 0.1;
+    const k = Math.floor(rand(3, 5));
+    for (let i = 0; i < k; i++) {
+      const h = H * rand(0.45, 0.85), segs = Math.floor(h / (MIN * 0.075)), leaves = [];
+      for (let s = Math.floor(segs * 0.45); s < segs; s++) if (Math.random() < 0.6) {
+        const side = Math.random() < .5 ? -1 : 1, cnt = Math.floor(rand(3, 6));
+        for (let q = 0; q < cnt; q++) leaves.push({ s, ang: side * rand(0.5, 1.6) + Math.PI / 2 + rand(-.3, .3), len: MIN * rand(0.05, 0.09), w: MIN * rand(0.008, 0.013), a: rand(0.5, 1), ph: rand(0, 9), d: rand(0, 1) });
+      }
+      this.stalks.push({ x: bx + rand(-1, 1) * MIN * 0.07, h, segs, w: MIN * rand(0.008, 0.013), lean: rand(-0.12, 0.12), ph: rand(0, 6), a: rand(0.55, 1), leaves });
+    }
+  }
+  draw() {
+    const g = clamp((now - this.born) / 2.5, 0, 1);
+    for (const st of this.stalks) {
+      const pts = [], segs = st.segs;
+      for (let s = 0; s <= segs; s++) {
+        const u = s / segs, sway = (Math.sin(now * 1.2 + st.ph) * 0.02 + wind * 0.12) * u * u;
+        pts.push([st.x + Math.sin(st.lean + sway) * st.h * u, H + 10 - Math.cos(st.lean + sway) * st.h * u]);
+      }
+      const shown = g * segs;
+      ctx.strokeStyle = rgba(C.ink, st.a * this.fade); ctx.lineCap = 'butt';
+      for (let s = 0; s < Math.min(segs, Math.ceil(shown)); s++) {
+        const a = pts[s], b = pts[s + 1], f = clamp(shown - s, 0, 1);
+        ctx.lineWidth = st.w * (1 - s / segs * 0.4);
+        ctx.beginPath(); ctx.moveTo(a[0], a[1] - 3); ctx.lineTo(lerp(a[0], b[0], f), lerp(a[1], b[1], f) + 3); ctx.stroke();
+        // 竹节
+        ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(a[0] - st.w * 0.8, a[1]); ctx.quadraticCurveTo(a[0], a[1] - 3, a[0] + st.w * 0.8, a[1]); ctx.stroke();
+      }
+      for (const lf of st.leaves) {
+        const lg = clamp((g * segs - lf.s) * 0.8 - lf.d, 0, 1); if (lg <= 0) continue;
+        const p = pts[lf.s], sw = Math.sin(now * 2 + lf.ph) * 0.08 + wind * 0.5;
+        leaf(p[0], p[1], lf.ang + sw, lf.len * lg, lf.w * lg, rgba(C.ink, lf.a * st.a * this.fade));
+      }
+    }
+  }
+}
+// —— 梅 ——
+class Plum extends Base {
+  constructor(n) {
+    super('梅'); this.br = []; this.fl = [];
+    const fromRight = n % 2 === 0, x0 = fromRight ? W + 10 : -10, y0 = H * rand(0.28, 0.4);
+    const grow = (x, y, a, len, w, d, t) => {
+      const x2 = x + Math.cos(a) * len, y2 = y + Math.sin(a) * len;
+      const mx = (x + x2) / 2 + rand(-1, 1) * len * 0.15, my = (y + y2) / 2 + rand(-1, 1) * len * 0.15;
+      this.br.push({ x, y, mx, my, x2, y2, w, t });
+      if (d > 0) {
+        grow(x2, y2, a + rand(-0.5, 0.35), len * rand(0.6, 0.85), w * 0.68, d - 1, t + 0.35);
+        if (Math.random() < 0.75) grow(x2, y2, a + rand(-1.2, 1.0), len * rand(0.4, 0.7), w * 0.55, d - 2, t + 0.45);
+      }
+      if (d <= 2) for (let k = 0; k < (d === 0 ? 2 : 1); k++) this.fl.push({ x: lerp(x, x2, rand(0.4, 1)) + rand(-6, 6), y: lerp(y, y2, rand(0.4, 1)) + rand(-6, 6), r: MIN * rand(0.008, 0.014), t: t + rand(0.6, 1.6), bud: Math.random() < 0.25, rot: rand(0, 6) });
+    };
+    grow(x0, y0, fromRight ? Math.PI + rand(-0.25, 0.1) : rand(-0.1, 0.25), MIN * 0.17, MIN * 0.022, 5, 0);
+  }
+  more() { const b = this.br.filter(b => b.w < MIN * 0.012); for (let i = 0; i < 18; i++) { const s = b[Math.floor(Math.random() * b.length)]; if (s) this.fl.push({ x: lerp(s.x, s.x2, Math.random()) + rand(-6, 6), y: lerp(s.y, s.y2, Math.random()) + rand(-6, 6), r: MIN * rand(0.008, 0.014), t: now - this.born + rand(0, 1.5), bud: false, rot: rand(0, 6) }); } }
+  draw() {
+    const t = now - this.born; ctx.lineCap = 'round';
+    for (const b of this.br) {
+      const f = clamp((t - b.t) / 0.4, 0, 1); if (f <= 0) continue;
+      ctx.strokeStyle = rgba(C.ink, 0.9 * this.fade); ctx.lineWidth = b.w;
+      ctx.beginPath(); ctx.moveTo(b.x, b.y);
+      if (f >= 1) ctx.quadraticCurveTo(b.mx, b.my, b.x2, b.y2); else ctx.lineTo(lerp(b.x, b.x2, f), lerp(b.y, b.y2, f));
+      ctx.stroke();
+    }
+    for (const fl of this.fl) {
+      const f = clamp((t - fl.t) / 0.8, 0, 1); if (f <= 0) continue;
+      const r = fl.r * f;
+      ctx.fillStyle = rgba(C.red, 0.85 * this.fade);
+      if (fl.bud) { ctx.beginPath(); ctx.arc(fl.x, fl.y, r * 0.55, 0, 7); ctx.fill(); continue; }
+      for (let k = 0; k < 5; k++) { const a = fl.rot + k * 1.2566; ctx.beginPath(); ctx.arc(fl.x + Math.cos(a) * r * 0.6, fl.y + Math.sin(a) * r * 0.6, r * 0.55, 0, 7); ctx.fill(); }
+      ctx.fillStyle = rgba(mixc([240, 200, 80], [255, 220, 120], T), 0.9 * this.fade); ctx.beginPath(); ctx.arc(fl.x, fl.y, r * 0.18, 0, 7); ctx.fill();
+    }
+  }
+}
+// —— 鱼 ——
+class Fish extends Base {
+  constructor(x, y) { super('鱼'); this.f = []; for (let i = 0; i < 9; i++) { const a = rand(0, 6.28); this.f.push({ x: x + rand(-40, 40), y: y + rand(-30, 30), vx: Math.cos(a) * 60, vy: Math.sin(a) * 60, s: MIN * rand(0.014, 0.024), red: Math.random() < 0.25, ph: rand(0, 9) }); } }
+  update(dt) {
+    const top = H * 0.6, bot = H - 130;
+    for (const a of this.f) {
+      let ax = 0, ay = 0, cx = 0, cy = 0, n = 0;
+      for (const b of this.f) { if (a === b) continue; const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy); if (d < 120) { cx += b.x; cy += b.y; n++; } if (d < 30) { ax -= dx / d * 80; ay -= dy / d * 80; } }
+      if (n) { ax += (cx / n - a.x) * 0.3; ay += (cy / n - a.y) * 0.3; }
+      ax += Math.sin(now * 0.7 + a.ph) * 40; ay += Math.cos(now * 0.9 + a.ph) * 30;
+      if (a.y < top) ay += 120; if (a.y > bot) ay -= 120; if (a.x < 40) ax += 120; if (a.x > W - 40) ax -= 120;
+      const pd = Math.hypot(a.x - mouse.x, a.y - mouse.y); if (pd < 110) { ax += (a.x - mouse.x) / pd * 400; ay += (a.y - mouse.y) / pd * 400; }
+      a.vx += ax * dt; a.vy += ay * dt; const sp = Math.hypot(a.vx, a.vy), ms = pd < 110 ? 220 : 90;
+      if (sp > ms) { a.vx *= ms / sp; a.vy *= ms / sp; } if (sp < 30) { a.vx *= 1.05; a.vy *= 1.05; }
+      a.x += a.vx * dt; a.y += a.vy * dt;
+    }
+  }
+  draw() {
+    const r = this.rev;
+    for (const a of this.f) {
+      const ang = Math.atan2(a.vy, a.vx), s = a.s, wig = Math.sin(now * 9 + a.ph) * 0.35;
+      ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(ang);
+      ctx.fillStyle = rgba(a.red ? C.red : C.ink, 0.85 * r);
+      ctx.beginPath(); ctx.moveTo(s * 1.2, 0); ctx.quadraticCurveTo(s * 0.4, -s * 0.5, -s * 0.6, 0); ctx.quadraticCurveTo(s * 0.4, s * 0.5, s * 1.2, 0); ctx.fill();
+      ctx.rotate(wig); ctx.beginPath(); ctx.moveTo(-s * 0.5, 0); ctx.lineTo(-s * 1.3, -s * 0.45); ctx.quadraticCurveTo(-s * 1.0, 0, -s * 1.3, s * 0.45); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+}
+// —— 鸟 ——
+class Birds extends Base {
+  constructor(x, y) { super('鸟'); this.b = []; for (let i = 0; i < 7; i++) { const dir = Math.random() < .5 ? -1 : 1; this.b.push({ x: x + rand(-30, 30), y: y + rand(-20, 20), vx: dir * rand(60, 120), vy: rand(-30, 10), s: MIN * rand(0.012, 0.022), ph: rand(0, 9), fs: rand(7, 10) }); } }
+  update(dt) {
+    for (const b of this.b) {
+      b.vy += (Math.sin(now * 0.8 + b.ph) * 20 + (H * 0.25 - b.y) * 0.2) * dt;
+      b.vx += wind * 120 * dt;
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.x > W + 40) b.x = -40; if (b.x < -40) b.x = W + 40;
+    }
+  }
+  draw() {
+    const r = this.rev; ctx.strokeStyle = rgba(C.ink, 0.85 * r); ctx.lineCap = 'round';
+    for (const b of this.b) {
+      const f = Math.sin(now * b.fs + b.ph), s = b.s, d = Math.sign(b.vx) || 1;
+      ctx.lineWidth = s * 0.22;
+      ctx.beginPath(); ctx.moveTo(b.x - s, b.y - f * s * 0.6); ctx.quadraticCurveTo(b.x - s * 0.4, b.y - s * 0.1 - f * s * 0.2, b.x, b.y);
+      ctx.quadraticCurveTo(b.x + s * 0.4, b.y - s * 0.1 - f * s * 0.2, b.x + s, b.y - f * s * 0.6); ctx.stroke();
+      ctx.fillStyle = rgba(C.ink, 0.85 * r); ctx.beginPath(); ctx.ellipse(b.x + d * s * 0.1, b.y + s * 0.05, s * 0.28, s * 0.12, 0, 0, 7); ctx.fill();
+    }
+  }
+}
+// —— 蝶 ——
+class Butterflies extends Base {
+  constructor(x, y) { super('蝶'); this.b = []; for (let i = 0; i < 4; i++) this.b.push({ x: x + rand(-40, 40), y: y + rand(-30, 30), vx: 0, vy: 0, s: MIN * rand(0.016, 0.024), ph: rand(0, 99), col: ['r', 'c', 'k', 'r'][i] }); }
+  update(dt) {
+    for (const b of this.b) {
+      b.vx += (Math.sin(now * 1.3 + b.ph) * 90 + wind * 200) * dt; b.vy += Math.cos(now * 1.7 + b.ph * 1.3) * 90 * dt;
+      b.vx += (W / 2 - b.x) * 0.02 * dt; b.vy += (H * 0.45 - b.y) * 0.03 * dt;
+      b.vx *= 0.98; b.vy *= 0.98; b.x += b.vx * dt; b.y += b.vy * dt + Math.sin(now * 12 + b.ph) * 0.6;
+    }
+  }
+  draw() {
+    const r = this.rev;
+    for (const b of this.b) {
+      const f = Math.abs(Math.sin(now * 11 + b.ph)) * 0.8 + 0.2, s = b.s, col = b.col === 'r' ? C.red : b.col === 'c' ? C.teal : C.ink;
+      ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(Math.atan2(b.vy, b.vx) * 0.15);
+      ctx.fillStyle = rgba(col, 0.8 * r);
+      for (const sd of [-1, 1]) {
+        ctx.beginPath(); ctx.ellipse(sd * s * 0.55 * f, -s * 0.3, s * 0.55 * f, s * 0.42, sd * 0.4, 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(sd * s * 0.4 * f, s * 0.3, s * 0.35 * f, s * 0.3, -sd * 0.4, 0, 7); ctx.fill();
+      }
+      ctx.fillStyle = rgba(C.ink, r); ctx.fillRect(-1, -s * 0.5, 2, s);
+      ctx.restore();
+    }
+  }
+}
+// —— 龙 ——
+class Dragon extends Base {
+  constructor(x, y) {
+    super('龙'); this.n = 64; this.sp = MIN * 0.0145; this.R = MIN * 0.027; this.p = [];
+    this.ang = rand(0, 6.28); this.spd = 0;
+    for (let i = 0; i < this.n; i++) this.p.push([x - Math.cos(this.ang) * i * this.sp * 0.3, y - Math.sin(this.ang) * i * this.sp * 0.3]);
+    this.ph = rand(0, 99); this.fire = 0;
+  }
+  head() { return this.p[0]; }
+  update(dt) {
+    const h = this.p[0];
+    let tx, ty;
+    if (now - mouse.t < 2.5) { tx = mouse.x; ty = mouse.y; }
+    else { tx = W * (0.5 + 0.33 * Math.cos(now * 0.31 + this.ph)); ty = H * (0.45 + 0.25 * Math.sin(now * 0.53 + this.ph)); }
+    const want = Math.atan2(ty - h[1], tx - h[0]);
+    let da = want - this.ang; while (da > Math.PI) da -= 6.283; while (da < -Math.PI) da += 6.283;
+    this.ang += clamp(da, -2.6 * dt, 2.6 * dt) + Math.sin(now * 2.3 + this.ph) * 0.6 * dt;
+    const dist = Math.hypot(tx - h[0], ty - h[1]);
+    this.spd = lerp(this.spd, clamp(dist * 1.2, MIN * 0.2, MIN * 0.75), 0.05);
+    h[0] += Math.cos(this.ang) * this.spd * dt; h[1] += Math.sin(this.ang) * this.spd * dt;
+    for (let i = 1; i < this.n; i++) {
+      const a = this.p[i - 1], b = this.p[i], dx = a[0] - b[0], dy = a[1] - b[1], d = Math.hypot(dx, dy) || 1;
+      if (d > this.sp) { b[0] = a[0] - dx / d * this.sp; b[1] = a[1] - dy / d * this.sp; }
+    }
+    // 搅动云墨
+    if (Math.random() < 0.5) { const q = this.p[Math.floor(rand(10, this.n))]; splat(q[0], q[1], rand(-30, 30), rand(-30, 30), MIN * 0.03, 'k', 0.015); }
+    splat(h[0], h[1], Math.cos(this.ang) * this.spd * 0.4, Math.sin(this.ang) * this.spd * 0.4, MIN * 0.03, null, 0);
+    if (this.fire > 0) {
+      this.fire -= dt;
+      const mx = h[0] + Math.cos(this.ang) * this.R * 3.4, my = h[1] + Math.sin(this.ang) * this.R * 3.4;
+      const cnt = Math.ceil(240 * dt);
+      for (let k = 0; k < cnt; k++) { const a = this.ang + rand(-0.22, 0.22), sp = rand(260, 520); const f = new FireP(mx, my, Math.cos(a) * sp, Math.sin(a) * sp); f.s *= 0.6; f.L *= 0.8; fx.push(f); }
+      splat(mx, my, Math.cos(this.ang) * 200, Math.sin(this.ang) * 200, MIN * 0.02, 'r', 0.05);
+    }
+  }
+  rad(i) { const u = i / (this.n - 1); return this.R * (0.8 + 0.35 * Math.sin(Math.min(1, u * 2.5) * Math.PI * 0.5)) * (1 - u * 0.78); }
+  draw() {
+    const r = this.rev, P = this.p, n = this.n;
+    if (r <= 0) return;
+    const nrm = [];
+    for (let i = 0; i < n; i++) { const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], dx = a[0] - b[0], dy = a[1] - b[1], d = Math.hypot(dx, dy) || 1; nrm.push([-dy / d, dx / d, dx / d, dy / d]); }
+    ctx.lineCap = 'round';
+    // 背鳍
+    for (let i = 4; i < n - 3; i += 2) {
+      const [nx, ny, tx, ty] = nrm[i], rr = this.rad(i), L = rr * (1.1 + 0.35 * Math.sin(i * 0.7 + now * 4));
+      ctx.strokeStyle = rgba(C.teal, 0.85 * r); ctx.lineWidth = Math.max(1, rr * 0.25);
+      ctx.beginPath(); ctx.moveTo(P[i][0] + nx * rr * 0.8, P[i][1] + ny * rr * 0.8);
+      ctx.quadraticCurveTo(P[i][0] + nx * (rr + L * 0.6), P[i][1] + ny * (rr + L * 0.6), P[i][0] + nx * (rr + L) - tx * L * 0.8, P[i][1] + ny * (rr + L) - ty * L * 0.8); ctx.stroke();
+    }
+    // 尾鬃
+    const tl = P[n - 1], [tnx, tny, ttx, tty] = nrm[n - 1];
+    for (let k = -4; k <= 4; k++) {
+      const L = this.R * (2.2 - Math.abs(k) * 0.25), w = Math.sin(now * 5 + k) * 0.3;
+      ctx.strokeStyle = rgba(k % 2 ? C.red : C.teal, 0.8 * r); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(tl[0], tl[1]);
+      ctx.quadraticCurveTo(tl[0] - ttx * L * 0.5 + tnx * k * 3, tl[1] - tty * L * 0.5 + tny * k * 3, tl[0] - ttx * L + tnx * (k * 6 + w * 20), tl[1] - tty * L + tny * (k * 6 + w * 20)); ctx.stroke();
+    }
+    // 爪：粗臂 + 四个弯钩
+    for (const li of [9, 30]) {
+      for (const sd of [1, -1]) {
+        const [nx, ny, tx, ty] = nrm[li], rr = this.rad(li), sw = Math.sin(now * 5 + li + sd) * 0.6;
+        const ex = P[li][0] + nx * sd * rr * 1.9 - tx * rr * (0.6 + sw), ey = P[li][1] + ny * sd * rr * 1.9 - ty * rr * (0.6 + sw);
+        const hx = ex + nx * sd * rr * 0.5 + tx * rr * 1.3, hy = ey + ny * sd * rr * 0.5 + ty * rr * 1.3;
+        ctx.strokeStyle = rgba(C.ink, r); ctx.lineWidth = rr * 0.75;
+        ctx.beginPath(); ctx.moveTo(P[li][0], P[li][1]); ctx.quadraticCurveTo(ex, ey, hx, hy); ctx.stroke();
+        ctx.strokeStyle = rgba(C.red, 0.8 * r); ctx.lineWidth = rr * 0.2;
+        ctx.beginPath(); ctx.moveTo(lerp(P[li][0], ex, 0.4), lerp(P[li][1], ey, 0.4)); ctx.lineTo(ex - tx * rr * 0.9, ey - ty * rr * 0.9); ctx.stroke();
+        ctx.strokeStyle = rgba(C.ink, r); ctx.lineWidth = rr * 0.22;
+        for (let c = -1.5; c <= 1.5; c++) {
+          const ox = hx + tx * rr * 0.2 + nx * sd * c * rr * 0.28, oy = hy + ty * rr * 0.2 + ny * sd * c * rr * 0.28;
+          ctx.beginPath(); ctx.moveTo(hx, hy); ctx.quadraticCurveTo(ox + tx * rr * 0.6, oy + ty * rr * 0.6, ox + tx * rr * 0.5 + nx * sd * rr * 0.35, oy + ty * rr * 0.5 + ny * sd * rr * 0.35); ctx.stroke();
+        }
+      }
+    }
+    // 身体
+    ctx.fillStyle = rgba(C.ink, r);
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) { const rr = this.rad(i); ctx.lineTo(P[i][0] + nrm[i][0] * rr, P[i][1] + nrm[i][1] * rr); }
+    for (let i = n - 1; i >= 0; i--) { const rr = this.rad(i); ctx.lineTo(P[i][0] - nrm[i][0] * rr, P[i][1] - nrm[i][1] * rr); }
+    ctx.closePath(); ctx.fill();
+    // 腹线（朱）
+    ctx.strokeStyle = rgba(C.red, 0.85 * r);
+    for (let i = 3; i < n - 2; i++) { const rr = this.rad(i); ctx.lineWidth = rr * 0.45; ctx.beginPath(); ctx.moveTo(P[i][0] - nrm[i][0] * rr * 0.6, P[i][1] - nrm[i][1] * rr * 0.6); ctx.lineTo(P[i + 1][0] - nrm[i + 1][0] * rr * 0.6, P[i + 1][1] - nrm[i + 1][1] * rr * 0.6); ctx.stroke(); }
+    // 鳞
+    ctx.strokeStyle = rgba(mixc([200, 190, 170], [60, 65, 70], T), 0.45 * r); ctx.lineWidth = 0.8;
+    for (let i = 3; i < n - 4; i += 2) {
+      const rr = this.rad(i), a = Math.atan2(nrm[i][3], nrm[i][2]);
+      for (const o of [-0.1, 0.4]) { ctx.beginPath(); ctx.arc(P[i][0] + nrm[i][0] * rr * o, P[i][1] + nrm[i][1] * rr * o, rr * 0.38, a + Math.PI * 0.5, a + Math.PI * 1.5); ctx.stroke(); }
+    }
+    // 头（比身体大一圈，五官用浅色勾出）
+    const h = P[0], R = this.R * 1.3, ang = Math.atan2(nrm[0][3], nrm[0][2]);
+    const light = rgba(mixc([238, 230, 212], [20, 22, 26], T), 0.9 * r);
+    ctx.save(); ctx.translate(h[0], h[1]); ctx.rotate(ang);
+    // 鬃
+    for (let k = 0; k < 11; k++) {
+      const yy = (k - 5) * R * 0.16, L = R * (2.0 + Math.sin(k * 1.7) * 0.6), w = Math.sin(now * 4 + k) * R * 0.4;
+      ctx.strokeStyle = rgba(k % 3 === 0 ? C.red : C.teal, 0.9 * r); ctx.lineWidth = R * 0.12;
+      ctx.beginPath(); ctx.moveTo(-R * 0.1, yy); ctx.quadraticCurveTo(-R * 1.2, yy * 1.7 + w, -R * 0.7 - L, yy * 2.2 + w * 1.5); ctx.stroke();
+    }
+    // 鹿角
+    ctx.strokeStyle = rgba(mixc([120, 95, 60], [215, 205, 180], T), r); ctx.lineCap = 'round';
+    for (const sd of [-1, 1]) {
+      ctx.lineWidth = R * 0.16; ctx.beginPath(); ctx.moveTo(R * 0.3, sd * R * 0.5); ctx.quadraticCurveTo(-R * 0.4, sd * R * 1.3, -R * 1.6, sd * R * 1.15); ctx.stroke();
+      ctx.lineWidth = R * 0.1; ctx.beginPath(); ctx.moveTo(-R * 0.5, sd * R * 1.15); ctx.lineTo(-R * 0.6, sd * R * 1.65); ctx.moveTo(-R * 1.0, sd * R * 1.2); ctx.lineTo(-R * 1.3, sd * R * 1.6); ctx.stroke();
+    }
+    // 下颌（微张）
+    const jaw = 0.15 + Math.max(0, Math.sin(now * 1.5)) * 0.2 + (this.fire > 0 ? 0.35 : 0);
+    ctx.save(); ctx.translate(R * 0.4, R * 0.25); ctx.rotate(jaw);
+    ctx.fillStyle = rgba(C.ink, r); ctx.beginPath(); ctx.moveTo(0, -R * 0.1); ctx.quadraticCurveTo(R * 1.0, R * 0.35, R * 1.9, R * 0.1); ctx.lineTo(R * 1.8, -R * 0.05); ctx.lineTo(0, -R * 0.15); ctx.fill();
+    ctx.fillStyle = light; for (let k = 0; k < 4; k++) { const tx2 = R * (0.6 + k * 0.32); ctx.beginPath(); ctx.moveTo(tx2, -R * 0.06); ctx.lineTo(tx2 + R * 0.08, -R * 0.24); ctx.lineTo(tx2 + R * 0.16, -R * 0.06); ctx.fill(); }
+    ctx.restore();
+    // 口腔
+    ctx.fillStyle = rgba(C.red, r); ctx.beginPath(); ctx.moveTo(R * 0.4, R * 0.18); ctx.lineTo(R * 2.0, R * 0.2); ctx.lineTo(R * 0.6, R * 0.45); ctx.fill();
+    // 上颌与头骨
+    ctx.fillStyle = rgba(C.ink, r);
+    ctx.beginPath(); ctx.moveTo(-R * 0.7, -R * 0.7); ctx.quadraticCurveTo(R * 0.5, -R * 1.05, R * 1.1, -R * 0.55);
+    ctx.quadraticCurveTo(R * 1.8, -R * 0.5, R * 2.3, -R * 0.3); ctx.quadraticCurveTo(R * 2.55, 0, R * 2.2, R * 0.22);
+    ctx.lineTo(R * 0.4, R * 0.2); ctx.quadraticCurveTo(-R * 0.2, R * 0.8, -R * 0.7, R * 0.7); ctx.closePath(); ctx.fill();
+    // 上牙
+    ctx.fillStyle = light; for (let k = 0; k < 5; k++) { const tx2 = R * (0.6 + k * 0.3); ctx.beginPath(); ctx.moveTo(tx2, R * 0.2); ctx.lineTo(tx2 + R * 0.08, R * 0.38); ctx.lineTo(tx2 + R * 0.16, R * 0.2); ctx.fill(); }
+    // 眉骨与鼻
+    ctx.strokeStyle = light; ctx.lineWidth = R * 0.07;
+    ctx.beginPath(); ctx.moveTo(R * 0.2, -R * 0.68); ctx.quadraticCurveTo(R * 0.75, -R * 0.85, R * 1.2, -R * 0.5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(R * 2.05, -R * 0.2, R * 0.12, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-R * 0.4, R * 0.3); ctx.quadraticCurveTo(-R * 0.1, -R * 0.1, -R * 0.5, -R * 0.4); ctx.stroke();
+    // 眼
+    ctx.fillStyle = rgba([250, 245, 225], r); ctx.beginPath(); ctx.ellipse(R * 0.75, -R * 0.42, R * 0.26, R * 0.19, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = rgba(C.red, r); ctx.beginPath(); ctx.arc(R * 0.8, -R * 0.42, R * 0.15, 0, 7); ctx.fill();
+    ctx.fillStyle = rgba([10, 10, 10], r); ctx.beginPath(); ctx.ellipse(R * 0.82, -R * 0.42, R * 0.04, R * 0.12, 0, 0, 7); ctx.fill();
+    // 须
+    ctx.strokeStyle = rgba(C.ink, 0.9 * r); ctx.lineWidth = Math.max(1.2, R * 0.06);
+    for (const sd of [-1, 1]) {
+      const w1 = Math.sin(now * 3 + sd) * R * 1.2, w2 = Math.cos(now * 2.4 + sd) * R * 1.5;
+      ctx.beginPath(); ctx.moveTo(R * 2.1, sd * R * 0.15 - R * 0.1); ctx.bezierCurveTo(R * 3.2, sd * R * 1.2 + w1, R * 0.5, sd * R * 2.6 + w2, -R * 2.2, sd * R * 2.3 + w1); ctx.stroke();
+    }
+    ctx.restore();
+    // 龙珠
+    const px = h[0] + Math.cos(this.ang) * R * 4.5 + Math.sin(now * 1.3) * R * 1.5, py = h[1] + Math.sin(this.ang) * R * 4.5 + Math.sin(now * 3) * R * 0.8;
+    if (this.fire > 0) return;
+    const pg = ctx.createRadialGradient(px, py, 0, px, py, R * 1.2);
+    pg.addColorStop(0, rgba(mixc([240, 120, 70], [255, 200, 120], T), 0.95 * r)); pg.addColorStop(0.4, rgba(C.red, 0.7 * r)); pg.addColorStop(1, rgba(C.red, 0));
+    ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(px, py, R * 1.2, 0, 7); ctx.fill();
+  }
+}
+// ========== 短命效果 ==========
+class Glyph {
+  constructor(ch, x, y, col) { this.ch = ch; this.x = x; this.y = y; this.t = 0; this.col = col || 'k'; this.font = isLatin(ch) ? FONT_EN : FONT; this.size = isLatin(ch) ? Math.min(MIN * 0.26, W * 0.82 / (ch.length * 0.5)) : MIN * 0.3; this.done = false; this.inj = false; this.rot = rand(-0.08, 0.08); }
+  update(dt) { this.t += dt; if (!this.inj && this.t > 0.45) { this.inj = true; injectGlyph(this.ch, this.x, this.y, this.size, this.col, this.font); } if (this.t > 1.6) this.done = true; }
+  draw() {
+    const a = this.t < 0.12 ? this.t / 0.12 : 1 - clamp((this.t - 0.45) / 1.0, 0, 1);
+    if (a <= 0) return;
+    const col = this.col === 'r' ? C.red : this.col === 'c' ? C.teal : C.ink;
+    ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.rot); const s = 1 + this.t * 0.05; ctx.scale(s, s);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `${this.size}px ${this.font}`;
+    if (this.t > 0.45) ctx.filter = `blur(${(this.t - 0.45) * 6}px)`;
+    ctx.fillStyle = rgba(col, a * 0.35); ctx.fillText(this.ch, 3, 2);
+    ctx.fillStyle = rgba(col, a); ctx.fillText(this.ch, 0, 0);
+    ctx.restore(); ctx.filter = 'none';
+  }
+}
+class FireP {
+  constructor(x, y, vx, vy) { this.x = x; this.y = y; this.vx = vx; this.vy = vy; this.l = 0; this.L = rand(0.5, 1.1); this.s = MIN * rand(0.012, 0.028); }
+  update(dt) { this.l += dt; this.vy -= 260 * dt; this.vx *= 0.96; this.vy *= 0.96; this.vx += rand(-200, 200) * dt + wind * 300 * dt; this.x += this.vx * dt; this.y += this.vy * dt; this.done = this.l > this.L; }
+  draw() {
+    const u = this.l / this.L, s = this.s * (1 - u * 0.7);
+    const col = u < 0.25 ? mixc([255, 235, 150], [255, 150, 40], u / 0.25) : u < 0.6 ? mixc([255, 150, 40], [200, 40, 20], (u - 0.25) / 0.35) : mixc([200, 40, 20], [80, 70, 70], (u - 0.6) / 0.4);
+    // 火舌：沿运动方向拉长的水滴形
+    const ang = Math.atan2(this.vy, this.vx), st = 1 + Math.min(2.2, Math.hypot(this.vx, this.vy) / 140);
+    ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(ang);
+    ctx.fillStyle = rgba(col, (1 - u) * (T > .5 ? 0.7 : 0.85)); ctx.beginPath(); ctx.ellipse(-s * st * 0.4, 0, s * st, s * 0.7, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+}
+class Emitter { constructor(x, y, dur, fn) { this.x = x; this.y = y; this.t = 0; this.d = dur; this.fn = fn; } update(dt) { this.t += dt; this.fn(this, dt); this.done = this.t > this.d; } draw() { } }
+class Drop {
+  constructor() { this.x = rand(-W * 0.2, W); this.y = rand(-50, -10); this.v = rand(700, 1000); this.g = rand(H * 0.55, H); this.l = rand(10, 22); }
+  update(dt) { this.x += (120 + wind * 400) * dt; this.y += this.v * dt; if (this.y > this.g) { this.done = true; fx.push(new Ripple(this.x, this.g, MIN * rand(0.01, 0.025), 0.8)); } }
+  draw() { ctx.strokeStyle = rgba(C.ink, 0.35); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x - this.l * 0.15, this.y - this.l); ctx.stroke(); }
+}
+class Ripple {
+  constructor(x, y, R, d) { this.x = x; this.y = y; this.R = R; this.t = 0; this.d = d; }
+  update(dt) { this.t += dt; this.done = this.t > this.d; }
+  draw() { const u = this.t / this.d; ctx.strokeStyle = rgba(T > .5 ? C.teal : C.ink, (1 - u) * 0.45); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(this.x, this.y, this.R * u * 3, this.R * u, 0, 0, 7); ctx.stroke(); }
+}
+class Flake {
+  constructor() { this.x = rand(0, W); this.y = rand(-40, -5); this.v = rand(40, 90); this.s = rand(1.5, 4); this.ph = rand(0, 9); }
+  update(dt) { this.y += this.v * dt; this.x += (Math.sin(now * 1.5 + this.ph) * 30 + wind * 200) * dt; this.done = this.y > H + 10; }
+  draw() { ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.strokeStyle = rgba(C.ink, 0.25 * (1 - T)); ctx.lineWidth = 0.6; ctx.beginPath(); ctx.arc(this.x, this.y, this.s, 0, 7); ctx.fill(); ctx.stroke(); }
+}
+class Bolt {
+  constructor(x, y) {
+    this.t = 0; this.paths = [];
+    const make = (x, y, a, len, w) => { const pts = [[x, y]]; let cx = x, cy = y; const n = 14; for (let i = 0; i < n; i++) { cx += Math.cos(a) * len / n + rand(-1, 1) * len * 0.05; cy += Math.sin(a) * len / n; pts.push([cx, cy]); if (w > 1.5 && Math.random() < 0.15) make(cx, cy, a + rand(-0.7, 0.7), len * 0.4, w * 0.5); } this.paths.push({ pts, w }); };
+    make(x, -10, Math.PI / 2 + rand(-0.2, 0.2), y + 10, 4);
+  }
+  update(dt) { this.t += dt; this.done = this.t > 0.7; }
+  draw() {
+    const on = this.t < 0.12 || (this.t > 0.22 && this.t < 0.4); if (!on) return;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const p of this.paths) {
+      ctx.strokeStyle = T > 0.5 ? 'rgba(220,230,255,0.95)' : rgba(C.ink, 0.95); ctx.lineWidth = p.w;
+      if (T > 0.5) { ctx.shadowColor = 'rgba(160,190,255,1)'; ctx.shadowBlur = 20; }
+      ctx.beginPath(); p.pts.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.stroke(); ctx.shadowBlur = 0;
+    }
+  }
+}
+class Leaf {
+  constructor() { this.x = -20; this.y = rand(0, H * 0.8); this.vx = rand(250, 450); this.ph = rand(0, 9); this.s = MIN * rand(0.02, 0.035); this.red = Math.random() < 0.3; }
+  update(dt) { this.x += this.vx * dt * (0.4 + wind); this.y += Math.sin(now * 3 + this.ph) * 60 * dt + 20 * dt; this.done = this.x > W + 30; }
+  draw() { leaf(this.x, this.y, now * 4 + this.ph, this.s, this.s * 0.2, rgba(this.red ? C.red : C.ink, 0.75)); }
+}
+
+// ========== 字 → 世界 ==========
+const BAR = '山月竹梅鱼鸟蝶龙风雨雪火水雷夜昼空';
+const POEM = { 山: '江山如画', 月: '明月松间照', 竹: '竹报平安', 梅: '暗香浮动', 鱼: '鱼戏莲叶间', 鸟: '鸟鸣山更幽', 蝶: '庄周梦蝶', 龙: '飞龙在天', 风: '风起青萍之末', 雨: '润物细无声', 雪: '千山暮雪', 火: '星火燎原', 水: '上善若水', 雷: '雷动九天', 夜: '月落乌啼', 昼: '白日依山尽', 空: '色即是空' };
+const ALIAS = { 峰: '山', 岳: '山', 岭: '山', 鲤: '鱼', 雀: '鸟', 燕: '鸟', 鹤: '鸟', 花: '梅', 樱: '梅', 桃: '梅', 林: '竹', 蛇: '龙', 焰: '火', 炎: '火', 电: '雷', 霆: '雷', 冰: '雪', 霜: '雪', 江: '水', 河: '水', 湖: '水', 海: '水', 晚: '夜', 黑: '夜', 星: '夜', 日: '昼', 天: '昼', 阳: '昼', 晴: '昼', 无: '空', 清: '空', 蝴: '蝶' };
+const POEM_EN = { 山: 'Mountains rise like a painting', 月: 'Bright moon through the pines', 竹: 'Bamboo bends, never breaks', 梅: 'Plum blossoms, hidden fragrance', 鱼: 'Fish play among the lotus', 鸟: 'Birdsong deepens the hills', 蝶: 'Dreaming of the butterfly', 龙: 'The dragon soars in heaven', 风: 'Wind rises from the reeds', 雨: 'Rain falls without a sound', 雪: 'Snow on a thousand peaks', 火: 'A single spark lights the plain', 水: 'The highest good is like water', 雷: 'Thunder shakes the nine heavens', 夜: 'Moon sets, crows call', 昼: 'White sun over the hills', 空: 'Form is emptiness' };
+const EN_WORD = { 山: 'mountain', 月: 'moon', 竹: 'bamboo', 梅: 'plum', 鱼: 'fish', 鸟: 'bird', 蝶: 'butterfly', 龙: 'dragon', 风: 'wind', 雨: 'rain', 雪: 'snow', 火: 'fire', 水: 'water', 雷: 'thunder', 夜: 'night', 昼: 'day', 空: 'clear' };
+const EN_MAP = {};
+for (const k in EN_WORD) EN_MAP[EN_WORD[k]] = k;
+Object.assign(EN_MAP, { mountains: '山', hill: '山', hills: '山', peak: '山', peaks: '山', rock: '山', moonlight: '月', bamboos: '竹', forest: '竹', tree: '竹', trees: '竹', blossom: '梅', blossoms: '梅', flower: '梅', flowers: '梅', sakura: '梅', cherry: '梅', koi: '鱼', fishes: '鱼', carp: '鱼', birds: '鸟', crane: '鸟', swallow: '鸟', butterflies: '蝶', moth: '蝶', dragons: '龙', loong: '龙', serpent: '龙', breeze: '风', windy: '风', storm: '雷', lightning: '雷', thunderstorm: '雷', rainy: '雨', snowy: '雪', ice: '雪', winter: '雪', flame: '火', flames: '火', fires: '火', blaze: '火', river: '水', sea: '水', ocean: '水', lake: '水', wave: '水', waves: '水', splash: '水', dark: '夜', evening: '夜', stars: '夜', sun: '昼', sunny: '昼', morning: '昼', daylight: '昼', light: '昼', empty: '空', void: '空', reset: '空', erase: '空', nothing: '空' });
+const I18N = {
+  zh: { tag: '字即世界 · 落笔成灵', auto: '自在', sound: '有声', shot: '留影', lang: 'EN', write: '✎ 写字', title: '墨生 · 字即世界',
+    hint: '键盘直接打字，字会活过来 · 拖动落墨 · 按住 Shift 泼水 · 1 墨 2 朱 3 青（英文单词也行）', hintM: '点「写字」打字，字会活过来 · 手指拖动落墨 · 左侧选颜色/泼水', pal: ['墨', '朱', '青', '泼水'] },
+  en: { tag: 'Words become worlds', auto: 'Auto', sound: 'Sound', shot: 'Save', lang: '中文', write: '✎ Write', title: 'Mosheng · Words Become Ink',
+    hint: 'Type a word — dragon, moon, rain… it comes alive · Drag to paint · Hold Shift to splash · 1 ink 2 red 3 teal', hintM: 'Tap “Write” and type a word · Drag to paint · Pick color / splash on the left', pal: ['Ink', 'Red', 'Teal', 'Splash'] }
+};
+let LANG = (() => { const q = new URLSearchParams(location.search).get('lang'); if (q === 'en' || q === 'zh') return q; try { const s = localStorage.getItem('mosheng-lang'); if (s) return s; } catch (e) { } return /^zh/i.test(navigator.language || '') ? 'zh' : 'en'; })();
+const coarse = matchMedia('(hover:none),(max-width:700px)').matches;
+let counts = {}, color = 'k', waterMode = false;
+const poemEl = document.getElementById('poem');
+let poemTimer = 0;
+function showPoem(ch, key) {
+  const text = LANG === 'en' ? (POEM_EN[key] || `“${ch}” melts into ink`) : (POEM[key] || (ch + '　化墨'));
+  poemEl.innerHTML = `${text}<small>${ch}</small>`; poemEl.style.opacity = 0.85;
+  clearTimeout(poemTimer); poemTimer = setTimeout(() => poemEl.style.opacity = 0, 6000);
+}
+function effect(key, x, y) {
+  counts[key] = (counts[key] || 0) + 1; const n = counts[key];
+  switch (key) {
+    case '山': { const old = scene.filter(o => o.kind === '山' && !o.dying); if (old.length >= 2) old[0].dying = true; scene.unshift(new Mountains(n)); break; }
+    case '月': { const m = has('月'); if (m) m.pulse = 1; else scene.splice(scene.findIndex(o => o.kind !== '山') < 0 ? scene.length : scene.findIndex(o => o.kind !== '山'), 0, new Moon()); break; }
+    case '竹': { if (scene.filter(o => o.kind === '竹' && !o.dying).length < 3) scene.push(new Bamboo(n)); break; }
+    case '梅': { const p = scene.filter(o => o.kind === '梅' && !o.dying); if (p.length >= 2) p[0].more(); else scene.push(new Plum(n)); break; }
+    case '鱼': scene.push(new Fish(x, clamp(y, H * 0.65, H * 0.85))); break;
+    case '鸟': scene.push(new Birds(x, y)); break;
+    case '蝶': scene.push(new Butterflies(x, y)); break;
+    case '龙': { const d = scene.filter(o => o.kind === '龙' && !o.dying); if (d.length >= 2) d[0].dying = true; scene.push(new Dragon(x, y)); break; }
+    case '风': windT = 6; for (let i = 0; i < 25; i++) later(i * 0.12, () => fx.push(new Leaf())); break;
+    case '雨': fx.push(new Emitter(0, 0, 12, (e, dt) => { for (let i = 0; i < 6; i++) fx.push(new Drop()); })); sfxNoise(10, 'highpass', 2500, 0.05); break;
+    case '雪': fx.push(new Emitter(0, 0, 15, (e, dt) => { if (Math.random() < 0.9) fx.push(new Flake()); if (Math.random() < 0.5) fx.push(new Flake()); })); break;
+    case '火': {
+      const d = has('龙');
+      if (d) d.fire = 4;
+      else fx.push(new Emitter(x, y + MIN * 0.08, 5, (e) => { for (let i = 0; i < 6; i++) fx.push(new FireP(e.x + rand(-MIN * 0.05, MIN * 0.05), e.y, rand(-40, 40), rand(-160, -60))); if (Math.random() < .3) splat(e.x, e.y, 0, -120, MIN * 0.03, 'r', 0.08); }));
+      sfxNoise(2.5, 'bandpass', 600, 0.06); break;
+    }
+    case '水': {
+      for (let k = 0; k < 24; k++) { const a = k / 24 * 6.283; splat(x + Math.cos(a) * MIN * 0.05, y + Math.sin(a) * MIN * 0.05, Math.cos(a) * 900, Math.sin(a) * 900, MIN * 0.04, 'w', 1); }
+      splat(x, y, 0, 0, MIN * 0.06, 'c', 0.9);
+      for (let k = 0; k < 5; k++) later(k * 0.25, () => fx.push(new Ripple(x, y + MIN * 0.1, MIN * 0.08, 2.2)));
+      break;
+    }
+    case '雷': fx.push(new Bolt(x + rand(-W * 0.1, W * 0.1), H * rand(0.5, 0.75))); flash = 1; shake = 0.5; sfxNoise(3, 'lowpass', 160, 0.5);
+      later(0.7, () => { fx.push(new Bolt(rand(W * 0.2, W * 0.8), H * rand(0.4, 0.7))); flash = 0.7; }); break;
+    case '夜': Ttarget = 1; document.body.classList.add('night'); if (!has('月')) effect('月', x, y); break;
+    case '昼': Ttarget = 0; document.body.classList.remove('night'); break;
+    case '空': for (const o of scene) o.dying = true; fx = fx.filter(f => f instanceof Glyph); clearing = 1.5; windT = 0; break;
+  }
+}
+const queue = []; let qBusy = 0;
+// 按画面时间排程（不用 setTimeout，切后台也不乱序）
+const timers = [];
+function later(sec, fn) { timers.push([now + sec, fn]); }
+function runLater() { for (let i = timers.length - 1; i >= 0; i--) if (timers[i][0] <= now) { const f = timers[i][1]; timers.splice(i, 1); f(); } }
+const typingEl = document.getElementById('typing');
+let wordBuf = '', wordT = 0;
+function setBuf(b) { wordBuf = b.slice(0, 16); typingEl.textContent = wordBuf; wordT = 1.3; }
+function flushWord() { if (wordBuf) queue.push(wordBuf); setBuf(''); }
+function handleText(s, whole) {
+  for (const ch of Array.from(s)) {
+    if (/[A-Za-z'\-]/.test(ch)) setBuf(wordBuf + ch);
+    else { flushWord(); if (ch.trim() && !/[0-9.,!?;:，。！？、；：]/.test(ch)) queue.push(ch); }
+  }
+  if (whole) flushWord();
+}
+function trigger(ch) {
+  const lw = ch.toLowerCase();
+  const key = BAR.includes(ch) ? ch : ALIAS[ch] || EN_MAP[lw] || (lw.endsWith('s') ? EN_MAP[lw.slice(0, -1)] : undefined);
+  const x = isLatin(ch) ? W * rand(0.42, 0.58) : W * rand(0.32, 0.68), y = H * rand(0.3, 0.48);
+  fx.push(new Glyph(ch, x, y, color));
+  showPoem(ch, key);
+  sfxChar(ch, key);
+  if (key) later(0.75, () => effect(key, x, y));
+}
+function loadFont(ch) { return Promise.race([document.fonts ? document.fonts.load(isLatin(ch) ? `100px "Kaushan Script"` : `100px "Ma Shan Zheng"`, ch) : Promise.resolve(), new Promise(r => setTimeout(r, 700))]).catch(() => { }); }
+
+// ========== 声音 ==========
+let actx = null, soundOn = true;
+function ac() { if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } } if (actx.state === 'suspended') actx.resume(); return actx; }
+const SCALE = [261.6, 293.7, 329.6, 392.0, 440.0, 523.3, 587.3, 659.3, 784.0];
+function pluck(f, vol) {
+  const a = ac(); if (!a) return; const t = a.currentTime;
+  const g = a.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + 3);
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(f * 7, t); lp.frequency.exponentialRampToValueAtTime(f * 1.4, t + 1.8);
+  [[1, 'triangle', 1], [2, 'sine', 0.3], [3, 'sine', 0.12]].forEach(([h, ty, v]) => { const o = a.createOscillator(); o.type = ty; o.frequency.value = f * h; const og = a.createGain(); og.gain.value = v; o.connect(og).connect(lp); o.start(t); o.stop(t + 3.1); });
+  lp.connect(g).connect(a.destination);
+}
+function sfxChar(ch, key) { if (!soundOn) return; const c = ch.codePointAt(0); pluck(SCALE[c % SCALE.length] / (key === '龙' || key === '山' ? 2 : 1), 0.16); setTimeout(() => pluck(SCALE[(c >> 3) % SCALE.length] * 0.5, 0.07), 180); }
+function sfxNoise(dur, type, freq, vol) {
+  if (!soundOn) return; const a = ac(); if (!a) return; const t = a.currentTime;
+  const buf = a.createBuffer(1, a.sampleRate * dur, a.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const s = a.createBufferSource(); s.buffer = buf; const f = a.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+  const g = a.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f).connect(g).connect(a.destination); s.start(t);
+}
+
+// ========== 交互 ==========
+const mouse = { x: -999, y: -999, t: -99, down: false, lx: 0, ly: 0 };
+const ime = document.getElementById('ime');
+const focusIme = (force) => { if (coarse && !force) return; ime.focus({ preventScroll: true }); };
+let lastComp = { s: '', t: 0 }, composing = false;
+ime.addEventListener('compositionstart', () => composing = true);
+ime.addEventListener('compositionend', e => { composing = false; if (e.data) { handleText(e.data, true); lastComp = { s: e.data, t: performance.now() }; } ime.value = ''; });
+ime.addEventListener('input', e => {
+  if (e.isComposing || composing) return;
+  const s = e.data || ime.value;
+  if (e.inputType === 'insertLineBreak') { flushWord(); ime.value = ''; return; }
+  if (s && !(s === lastComp.s && performance.now() - lastComp.t < 120)) handleText(coarse ? s : s.replace(/[123]/g, ''), s.length > 2 && isLatin(s.trim()));
+  ime.value = '';
+});
+window.addEventListener('keydown', e => {
+  if (e.isComposing || composing) return;
+  if (e.key === 'Enter') { e.preventDefault(); flushWord(); return; }
+  if (e.key === 'Backspace' && wordBuf) { e.preventDefault(); setBuf(wordBuf.slice(0, -1)); return; }
+  const m = { '1': 'k', '2': 'r', '3': 'c' }[e.key];
+  if (m && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setColor(m); return; }
+  if (document.activeElement !== ime && e.key.length === 1 && !e.metaKey && !e.ctrlKey) focusIme();
+});
+cv.addEventListener('pointerdown', e => { mouse.down = true; mouse.lx = e.clientX; mouse.ly = e.clientY; ac(); });
+window.addEventListener('pointermove', e => {
+  const dx = e.clientX - mouse.lx, dy = e.clientY - mouse.ly;
+  mouse.x = e.clientX; mouse.y = e.clientY; mouse.t = now;
+  if (mouse.down) {
+    const v = 40; // 像素位移 → 速度
+    if (e.shiftKey || waterMode) splat(e.clientX, e.clientY, dx * v, dy * v, MIN * 0.05, 'w', 1);
+    else splat(e.clientX, e.clientY, dx * v * 0.6, dy * v * 0.6, MIN * 0.018, color, 0.45);
+  }
+  mouse.lx = e.clientX; mouse.ly = e.clientY;
+});
+window.addEventListener('pointerup', () => { mouse.down = false; if (!coarse) focusIme(); });
+window.addEventListener('pointercancel', () => { mouse.down = false; });
+const bar = document.getElementById('bar');
+const palEl = document.getElementById('pal');
+const PAL = [['k', '#1a1a1c'], ['r', '#b22a20'], ['c', '#24685f'], ['w', '']];
+function setColor(c) {
+  if (c === 'w') waterMode = !waterMode; else { color = c; waterMode = false; }
+  [...palEl.children].forEach((b, i) => b.classList.toggle('on', PAL[i][0] === 'w' ? waterMode : !waterMode && PAL[i][0] === color));
+}
+for (const [c, hex] of PAL) {
+  const b = document.createElement('button'); const i = document.createElement('i');
+  if (hex) i.style.background = hex; else { i.style.border = '2px solid #4a8fa0'; i.style.width = i.style.height = '12px'; }
+  b.appendChild(i); b.onclick = () => { setColor(c); focusIme(); }; palEl.appendChild(b);
+}
+function applyLang() {
+  const L = I18N[LANG];
+  document.body.classList.toggle('en', LANG === 'en');
+  document.documentElement.lang = LANG === 'en' ? 'en' : 'zh-CN';
+  document.title = L.title;
+  document.getElementById('tag').textContent = L.tag;
+  document.getElementById('bAuto').textContent = L.auto;
+  document.getElementById('bSound').textContent = L.sound;
+  document.getElementById('bShot').textContent = L.shot;
+  document.getElementById('bLang').textContent = L.lang;
+  document.getElementById('write').textContent = L.write;
+  document.getElementById('hint').textContent = coarse ? L.hintM : L.hint;
+  [...palEl.children].forEach((b, i) => { b.title = L.pal[i]; b.setAttribute('aria-label', L.pal[i]); });
+  bar.innerHTML = '';
+  for (const ch of BAR) {
+    const b = document.createElement('button'), label = LANG === 'en' ? EN_WORD[ch] : ch;
+    b.textContent = label; b.title = LANG === 'en' ? ch : EN_WORD[ch];
+    b.onclick = () => { ac(); queue.push(label); focusIme(); }; bar.appendChild(b);
+  }
+}
+applyLang(); setColor('k');
+document.getElementById('bLang').onclick = function () {
+  LANG = LANG === 'en' ? 'zh' : 'en'; try { localStorage.setItem('mosheng-lang', LANG); } catch (e) { }
+  const u = new URL(location.href); u.searchParams.set('lang', LANG); history.replaceState(null, '', u); applyLang(); focusIme();
+};
+document.getElementById('write').onclick = () => { ac(); ime.value = ''; focusIme(true); };
+let autoOn = false, autoT = 0;
+document.getElementById('bAuto').onclick = function () { autoOn = !autoOn; this.classList.toggle('on', autoOn); autoT = 0.5; focusIme(); };
+document.getElementById('bSound').onclick = function () { soundOn = !soundOn; this.classList.toggle('on', soundOn); if (soundOn) ac(); focusIme(); };
+document.getElementById('bShot').onclick = function () { const a = document.createElement('a'); a.download = (LANG === 'en' ? 'mosheng-' : '墨生-') + Date.now() + '.png'; a.href = cv.toDataURL('image/png'); a.click(); focusIme(); };
+
+// ========== 主循环 ==========
+function resize() {
+  const nw = innerWidth, nh = innerHeight;
+  // 手机弹出键盘只改高度：保持画布不变，免得画面被清掉
+  if (W && coarse && nw === W && nh < H) return;
+  DPR = Math.min(2, window.devicePixelRatio || 1); W = nw; H = nh; MIN = Math.min(W, H);
+  cv.width = W * DPR; cv.height = H * DPR; cv.style.width = W + 'px'; cv.style.height = H + 'px'; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  paperPat = ctx.createPattern(paperTex, 'repeat'); initFluid();
+}
+window.addEventListener('resize', resize); resize();
+let last = performance.now();
+function frame(ms) {
+  const dt = Math.min(0.05, (ms - last) / 1000); last = ms;
+  step(dt); runLater(); draw();
+  requestAnimationFrame(frame);
+}
+function step(dt) {
+  now += dt;
+  T = lerp(T, Ttarget, 1 - Math.pow(0.2, dt)); updateColors();
+  windT = Math.max(0, windT - dt); wind = lerp(wind, windT > 0 ? 1 : 0, 1 - Math.pow(0.3, dt));
+  if (wind > 0.05) for (let j = 2; j < gh - 2; j += 3) for (let i = 2; i < gw - 2; i += 3) U[i + j * gw] += wind * 25 * dt * (0.6 + 0.4 * Math.sin(j * 0.3 + now * 2));
+  if (wordBuf) { wordT -= dt; if (wordT <= 0) flushWord(); }
+  clearing = Math.max(0, clearing - dt); shake = Math.max(0, shake - dt); flash = Math.max(0, flash - dt * 3);
+  // 字的队列：一个个出
+  qBusy -= dt; if (queue.length && qBusy <= 0) { const ch = queue.shift(); qBusy = 0.35; loadFont(ch).then(() => trigger(ch)); }
+  if (autoOn) { autoT -= dt; if (autoT <= 0) { autoT = 3.6; const pool = '山月竹梅鱼鸟蝶龙风雨雪火水雷'; const c = Math.random() < 0.06 ? (Ttarget ? '昼' : '夜') : pool[Math.floor(Math.random() * pool.length)]; queue.push(LANG === 'en' ? EN_WORD[c] : c); } }
+  fluidStep(dt);
+  for (const o of scene) { if (o.update) o.update(dt); if (o.dying) o.fade -= dt / 1.5; }
+  scene = scene.filter(o => o.fade > 0);
+  for (const f of fx) f.update(dt);
+  fx = fx.filter(f => !f.done);
+}
+function draw() {
+  ctx.save();
+  if (shake > 0) ctx.translate(rand(-6, 6) * shake, rand(-6, 6) * shake);
+  ctx.fillStyle = rgba(C.paper, 1); ctx.fillRect(-10, -10, W + 20, H + 20);
+  ctx.globalAlpha = 0.55 * (1 - T) + 0.06 * T; ctx.fillStyle = paperPat; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+  const vg = ctx.createRadialGradient(W / 2, H / 2, MIN * 0.4, W / 2, H / 2, Math.hypot(W, H) * 0.6);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, `rgba(${T > .5 ? '0,0,0,0.5' : '90,70,40,0.12'})`); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  for (const o of scene) if (o.kind === '山' || o.kind === '月') o.draw();
+  renderDye();
+  for (const o of scene) if (o.kind !== '山' && o.kind !== '月') o.draw();
+  const night = T > 0.5;
+  for (const f of fx) { if (f instanceof FireP && night) ctx.globalCompositeOperation = 'lighter'; f.draw(); ctx.globalCompositeOperation = 'source-over'; }
+  if (flash > 0) { ctx.fillStyle = night ? `rgba(220,230,255,${flash * 0.5})` : `rgba(255,255,255,${flash * 0.6})`; ctx.fillRect(0, 0, W, H); }
+  ctx.restore();
+}
+requestAnimationFrame(frame);
+focusIme();
+// 开场：“墨生”两个字化开
+Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]).then(() => loadFont('墨生')).then(() => {
+  fx.push(new Glyph('墨', W * 0.42, H * 0.42, 'k')); fx.push(new Glyph('生', W * 0.58, H * 0.42, 'k'));
+});
+// 供测试：window.__type('山月龙')
+window.__type = s => handleText(s);
+window.__trig = ch => trigger(ch);
+window.__lang = l => { LANG = l; applyLang(); };
+window.__sim = sec => { for (let t = 0; t < sec; t += 1 / 30) { step(1 / 30); runLater(); } draw(); };
+</script>
+</body>
+</html>
