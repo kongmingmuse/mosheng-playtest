@@ -58,8 +58,10 @@
     body.en #poem{top:74px;font-size:19px}
     #bar{left:0;transform:none;width:100vw;max-width:100vw;bottom:calc(30px + env(safe-area-inset-bottom));padding:2px 12px;gap:7px}
     #bar button{width:38px;height:38px;font-size:19px;opacity:.85}
+    #bar button:first-child{margin-left:auto} #bar button:last-child{margin-right:auto}
+    #bar{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
     #hint{bottom:calc(10px + env(safe-area-inset-bottom));font-size:10.5px;max-width:96vw;overflow:hidden;text-overflow:ellipsis}
-    #pal{left:12px;bottom:calc(84px + env(safe-area-inset-bottom));flex-direction:column}
+    #pal{left:max(12px,env(safe-area-inset-left));bottom:calc(84px + env(safe-area-inset-bottom));flex-direction:column}
     #pal button{width:32px;height:32px}
     #typing{bottom:calc(140px + env(safe-area-inset-bottom))}
   }
@@ -211,7 +213,7 @@ function renderDye() {
     d[p + 3] = 255 * (1 - Math.exp(-s * 1.7));
   }
   dyeCtx.putImageData(dyeImg, 0, 0);
-  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'low'; // 'high' 在高清屏上大倍数放大极慢（实测 19→56 帧）
   ctx.drawImage(dyeCanvas, 0, 0, W, H);
 }
 // 把字形“写”进流体：字化成墨烟
@@ -497,6 +499,8 @@ class Dragon extends Base {
       const a = this.p[i - 1], b = this.p[i], dx = a[0] - b[0], dy = a[1] - b[1], d = Math.hypot(dx, dy) || 1;
       if (d > this.sp) { b[0] = a[0] - dx / d * this.sp; b[1] = a[1] - dy / d * this.sp; }
     }
+    // 平滑一遍，避免急转弯时身体折出尖角
+    for (let i = 1; i < this.n - 1; i++) { const a = this.p[i - 1], b = this.p[i], c = this.p[i + 1]; b[0] = b[0] * 0.5 + (a[0] + c[0]) * 0.25; b[1] = b[1] * 0.5 + (a[1] + c[1]) * 0.25; }
     // 搅动云墨
     if (Math.random() < 0.5) { const q = this.p[Math.floor(rand(10, this.n))]; splat(q[0], q[1], rand(-30, 30), rand(-30, 30), MIN * 0.03, 'k', 0.015); }
     splat(h[0], h[1], Math.cos(this.ang) * this.spd * 0.4, Math.sin(this.ang) * this.spd * 0.4, MIN * 0.03, null, 0);
@@ -696,9 +700,9 @@ for (const k in EN_WORD) EN_MAP[EN_WORD[k]] = k;
 Object.assign(EN_MAP, { mountains: '山', hill: '山', hills: '山', peak: '山', peaks: '山', rock: '山', moonlight: '月', bamboos: '竹', forest: '竹', tree: '竹', trees: '竹', blossom: '梅', blossoms: '梅', flower: '梅', flowers: '梅', sakura: '梅', cherry: '梅', koi: '鱼', fishes: '鱼', carp: '鱼', birds: '鸟', crane: '鸟', swallow: '鸟', butterflies: '蝶', moth: '蝶', dragons: '龙', loong: '龙', serpent: '龙', breeze: '风', windy: '风', storm: '雷', lightning: '雷', thunderstorm: '雷', rainy: '雨', snowy: '雪', ice: '雪', winter: '雪', flame: '火', flames: '火', fires: '火', blaze: '火', river: '水', sea: '水', ocean: '水', lake: '水', wave: '水', waves: '水', splash: '水', dark: '夜', evening: '夜', stars: '夜', sun: '昼', sunny: '昼', morning: '昼', daylight: '昼', light: '昼', empty: '空', void: '空', reset: '空', erase: '空', nothing: '空' });
 const I18N = {
   zh: { tag: '字即世界 · 落笔成灵', auto: '自在', sound: '有声', shot: '留影', lang: 'EN', write: '✎ 写字', title: '墨生 · 字即世界',
-    hint: '键盘直接打字，字会活过来 · 拖动落墨 · 按住 Shift 泼水 · 1 墨 2 朱 3 青（英文单词也行）', hintM: '点「写字」打字，字会活过来 · 手指拖动落墨 · 左侧选颜色/泼水', pal: ['墨', '朱', '青', '泼水'] },
+    hint: '键盘直接打字，字会活过来 · 拖动落墨 · 按住 Shift 泼水 · 1 墨 2 朱 3 青（英文单词也行）', hintM: '点「写字」打字 · 手指拖动落墨', pal: ['墨', '朱', '青', '泼水'] },
   en: { tag: 'Words become worlds', auto: 'Auto', sound: 'Sound', shot: 'Save', lang: '中文', write: '✎ Write', title: 'Mosheng · Words Become Ink',
-    hint: 'Type a word — dragon, moon, rain… it comes alive · Drag to paint · Hold Shift to splash · 1 ink 2 red 3 teal', hintM: 'Tap “Write” and type a word · Drag to paint · Pick color / splash on the left', pal: ['Ink', 'Red', 'Teal', 'Splash'] }
+    hint: 'Type a word — dragon, moon, rain… it comes alive · Drag to paint · Hold Shift to splash · 1 ink 2 red 3 teal', hintM: 'Tap Write, type a word · Drag to paint', pal: ['Ink', 'Red', 'Teal', 'Splash'] }
 };
 let LANG = (() => { const q = new URLSearchParams(location.search).get('lang'); if (q === 'en' || q === 'zh') return q; try { const s = localStorage.getItem('mosheng-lang'); if (s) return s; } catch (e) { } return /^zh/i.test(navigator.language || '') ? 'zh' : 'en'; })();
 const coarse = matchMedia('(hover:none),(max-width:700px)').matches;
